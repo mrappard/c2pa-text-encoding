@@ -1,0 +1,36 @@
+name: "Release"
+
+on:
+  push:
+    branches:
+      - "main"
+  workflow_dispatch:
+
+jobs:
+  build-packages:
+    name: Build and publish packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: "${{ secrets.GCP_ACCESS_KEY }}"
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+      - name: Build Docker package
+        run: nix build .#docker
+      - name: Upload the Docker image
+        run: |
+          docker load < result
+          gcloud auth configure-docker ${{ vars.REGION }}-docker.pkg.dev
+          docker image tag ${{ vars.NAME }}:latest ${{ vars.DOCKER_LOCATION }}/${{ vars.NAME }}:latest
+          docker push ${{ vars.DOCKER_LOCATION }}/${{ vars.NAME }}:latest
+      - name: Deploy on Google Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ vars.NAME }}
+          image: ${{ vars.DOCKER_LOCATION }}/${{ vars.NAME }}:latest
+          region: ${{ vars.REGION }}
