@@ -29,5 +29,6 @@ keys/
 /blob-report/
 /playwright/.cache/
 
-
+.yalc/
 /localNpm
+yalc.lock

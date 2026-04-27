@@ -1,9 +1,13 @@
 "use client";
 
-import { C2paManifest } from "c2pa-react-component";
+import { C2paManifest, type ManifestStore, type VerificationOutcome as ReactVerificationOutcome } from "c2pa-react-component";
+import type { VerificationOutcome } from "c2pa-rs-javascript-library";
 import { useRef, useState } from "react";
 import type { ChangeEvent, DragEvent } from "react";
 import { api } from "~/trpc/react";
+import "c2pa-react-component/style.css";
+import { C2paButton } from "../_components/button";
+
 
 const isMarkdownFile = (file: File) => {
   const fileName = file.name.toLowerCase();
@@ -17,7 +21,7 @@ export default function DragAndDropPage() {
   const [fileName, setFileName] = useState("");
   const [fileText, setFileText] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [verificationResult, setVerificationResult] = useState<unknown>(null);
+  const [verificationResult, setVerificationResult] = useState<ReactVerificationOutcome | null>(null);
 
   const verifyC2PATextMutation = api.verifyText.verifyC2PAText.useMutation();
 
@@ -65,6 +69,8 @@ export default function DragAndDropPage() {
     event.target.value = "";
   };
 
+  console.log(JSON.stringify(verificationResult, null, 2));
+
   return (
     <main className="flex min-h-screen flex-col bg-gray-100 p-6">
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
@@ -95,11 +101,10 @@ export default function DragAndDropPage() {
               }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
-              className={`flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed bg-white p-8 text-center shadow-sm transition-colors ${
-                isDragging
+              className={`flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed bg-white p-8 text-center shadow-sm transition-colors ${isDragging
                   ? "border-blue-500 bg-blue-50"
                   : "border-gray-300 hover:border-blue-300"
-              }`}
+                }`}
             >
               <input
                 ref={fileInputRef}
@@ -147,15 +152,24 @@ export default function DragAndDropPage() {
               )}
             </div>
 
-            <pre className="min-h-96 flex-1 overflow-auto p-4 text-sm leading-6 text-gray-800">
-              
-                <C2paManifest
-              manifest={sampleManifest}
-              level={1}
-              onViewMore={undefined}
-              defaultViewMore={true}
-            />
-            </pre>
+            <div className="min-h-96 flex-1 overflow-auto p-4 text-sm leading-6 text-gray-800">
+              {/* Center Components please */}
+              <div className="h-full rounded-lg border border-gray-200 bg-gray-50 p-4 flex items-center justify-center space-y-4">
+                {verificationResult && <div>
+                  <C2paManifest
+                    manifest={verificationResult}
+                    level={2}
+                    onViewMore={undefined}
+                    defaultViewMore={false}
+                  />
+
+                  <div className="mt-4">
+                    <C2paButton >Add to Library</C2paButton>
+                  </div>
+
+                </div>}
+              </div>
+            </div>
           </section>
         </section>
       </div>
