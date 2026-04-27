@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { paper1 } from "~/paper/paper1";
 import { paper2 } from "~/paper/paper2";
+import { DragAndDrop } from "./_components/DragAndDrop";
 import { Reader } from "./_components/Reader";
 import { Workspace } from "./_components/Workspace";
 import { paper3 } from "~/paper/paper3";
@@ -70,7 +71,7 @@ const PAPERS = [
 export default function Home() {
   const [selectedPaperId, setSelectedPaperId] = useState<string>(PAPERS[0]!.id);
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState<"reader" | "workspace">("reader");
+  const [activeTab, setActiveTab] = useState<"reader" | "workspace" | "verify">("reader");
 
   const filteredPapers = useMemo(() => {
     return PAPERS.filter((paper) =>
@@ -149,9 +150,23 @@ export default function Home() {
             >
               Workspace
             </button>
+            <button
+              onClick={() => setActiveTab("verify")}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === "verify"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Verify
+            </button>
           </div>
           <div className="text-xs text-gray-400 font-mono">
-            {activeTab === "reader" ? "MODE: READING" : "MODE: COMPOSING"}
+            {activeTab === "reader"
+              ? "MODE: READING"
+              : activeTab === "workspace"
+                ? "MODE: COMPOSING"
+                : "MODE: VERIFYING"}
           </div>
         </header>
 
@@ -159,8 +174,10 @@ export default function Home() {
         <div className="flex-1 relative overflow-hidden">
           {activeTab === "reader" ? (
             <Reader title={selectedPaper.title} content={selectedPaper.content} />
-          ) : (
+          ) : activeTab === "workspace" ? (
             <Workspace />
+          ) : (
+            <DragAndDrop />
           )}
         </div>
       </section>

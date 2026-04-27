@@ -1,30 +1,28 @@
 "use client";
 
-import { C2paManifest, type ManifestStore, type VerificationOutcome  } from "c2pa-react-component";
+import { C2paManifest, type VerificationOutcome } from "c2pa-react-component";
 import { useRef, useState } from "react";
 import type { ChangeEvent, DragEvent } from "react";
 import { api } from "~/trpc/react";
 import "c2pa-react-component/style.css";
-import { C2paButton } from "../_components/button";
+import { C2paButton } from "./button";
 import { useReaderStore } from "~/store/readerStore";
-
 
 const isMarkdownFile = (file: File) => {
   const fileName = file.name.toLowerCase();
-
   return fileName.endsWith(".md") || fileName.endsWith(".markdown");
 };
 
-export default function DragAndDropPage() {
+export const DragAndDrop = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState("");
   const [fileText, setFileText] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [verificationResult, setVerificationResult] = useState<VerificationOutcome | null>(null);
+  const [verificationResult, setVerificationResult] =
+    useState<VerificationOutcome | null>(null);
 
-  const readerStore = useReaderStore()
-
+  const readerStore = useReaderStore();
   const verifyC2PATextMutation = api.verifyText.verifyC2PAText.useMutation();
 
   const verifyFile = async (file: File) => {
@@ -39,7 +37,6 @@ export default function DragAndDropPage() {
     }
 
     const markdown = await file.text();
-
     setFileName(file.name);
     setFileText(markdown);
 
@@ -49,9 +46,7 @@ export default function DragAndDropPage() {
 
   const handleFiles = (files: FileList | null) => {
     const file = files?.[0];
-
     if (!file) return;
-
     void verifyFile(file).catch((error: unknown) => {
       setVerificationResult(null);
       setErrorMessage(
@@ -71,12 +66,8 @@ export default function DragAndDropPage() {
     event.target.value = "";
   };
 
-
-
-
-
   return (
-    <main className="flex min-h-screen flex-col bg-gray-100 p-6">
+    <div className="flex h-full flex-col bg-gray-100 p-6 overflow-auto">
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
         <header>
           <h1 className="text-2xl font-semibold text-gray-950">
@@ -105,10 +96,11 @@ export default function DragAndDropPage() {
               }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
-              className={`flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed bg-white p-8 text-center shadow-sm transition-colors ${isDragging
+              className={`flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed bg-white p-8 text-center shadow-sm transition-colors ${
+                isDragging
                   ? "border-blue-500 bg-blue-50"
                   : "border-gray-300 hover:border-blue-300"
-                }`}
+              }`}
             >
               <input
                 ref={fileInputRef}
@@ -157,38 +149,43 @@ export default function DragAndDropPage() {
             </div>
 
             <div className="min-h-96 flex-1 overflow-auto p-4 text-sm leading-6 text-gray-800">
-              {/* Center Components please */}
               <div className="h-full rounded-lg border border-gray-200 bg-gray-50 p-4 flex items-center justify-center space-y-4">
-                {verificationResult && <div>
-                  <C2paManifest
-                    manifest={verificationResult}
-                    level={2}
-                    onViewMore={undefined}
-                    defaultViewMore={false}
-                  />
-
-                  <div className="mt-4">
-                    <C2paButton onClick={()=>{
-
-                      const title =   verificationResult?.manifestStore?.manifests[verificationResult.manifestStore?.activeManifest]?.title;
-                      const id = verificationResult.manifestStore?.activeManifest;
-
-                      if (!title || !id || !verificationResult || !fileText) return;
-                      readerStore.insertAsset({
-                        id,
-                        title,
-                        manifest: verificationResult,
-                        markdown: fileText
-                      })
-                    }} >Add to Library</C2paButton>
+                {verificationResult && (
+                  <div>
+                    <C2paManifest
+                      manifest={verificationResult}
+                      level={2}
+                      onViewMore={undefined}
+                      defaultViewMore={false}
+                    />
+                    <div className="mt-4">
+                      <C2paButton
+                        onClick={() => {
+                          const title =
+                            verificationResult?.manifestStore?.manifests[
+                              verificationResult.manifestStore?.activeManifest
+                            ]?.title;
+                          const id =
+                            verificationResult.manifestStore?.activeManifest;
+                          if (!title || !id || !fileText) return;
+                          readerStore.insertAsset({
+                            id,
+                            title,
+                            manifest: verificationResult,
+                            markdown: fileText,
+                          });
+                        }}
+                      >
+                        Add to Library
+                      </C2paButton>
+                    </div>
                   </div>
-
-                </div>}
+                )}
               </div>
             </div>
           </section>
         </section>
       </div>
-    </main>
+    </div>
   );
-}
+};
