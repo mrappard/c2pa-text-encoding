@@ -3,10 +3,8 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { join } from "path";
 import { readFileSync } from "fs";
-import {
-  signMarkdownAsset,
-  verifyMarkdownAsset,
-} from "c2pa-rs-javascript-library";
+import { signMarkdownAsset } from "c2pa-rs-javascript-library";
+import type { ReaderAsset } from "~/store/readerStore";
 
 const SAMPLE_DIR = join(process.cwd(), "certs");
 
@@ -66,13 +64,17 @@ export const createTextRouter = createTRPCRouter({
         "es256",
       );
 
-      const outcome = await verifyMarkdownAsset(result.signedAsset, [certPem]);
-
-      console.log(JSON.stringify(outcome, null, 2));
-
-      // TURN THIS ARRAY BUFFER INTO A STRING AND LOG IT
       const signedAssetString = new TextDecoder().decode(result.signedAsset);
 
       return signedAssetString;
+    }),
+
+  populateC2PAText: publicProcedure
+    .mutation(() => {
+      const raw = readFileSync(
+        join(process.cwd(), "src", "store", "readerLibrary.json"),
+        "utf-8",
+      );
+      return JSON.parse(raw) as ReaderAsset[];
     }),
 });
