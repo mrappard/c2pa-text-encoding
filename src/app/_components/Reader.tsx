@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Markdown from "react-markdown";
 import { C2paManifest } from "c2pa-react-component";
 import "c2pa-react-component/style.css";
+import { variationSelectorToByte, embedSecretRepeatedly } from "~/encoder";
 import type { ReaderAsset } from "~/store/readerStore";
 
 interface ReaderProps {
@@ -35,6 +36,15 @@ export const Reader = ({ asset }: ReaderProps) => {
     () => asset.markdown.replace(/<!--[\s\S]*?-->/g, ""),
     [asset.markdown],
   );
+
+  // Strip any existing variation selectors so the carrier is clean plain text,
+  // then re-embed asset.id as the hidden secret for copy-paste traceability.
+  const encodedRawText = useMemo(() => {
+    const plainText = Array.from(cleanedMarkdown)
+      .filter((ch) => variationSelectorToByte(ch.codePointAt(0)!) === null)
+      .join("");
+    return embedSecretRepeatedly(plainText, asset.id, { spacing: 24 }).embeddedText;
+  }, [cleanedMarkdown, asset.id]);
 
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden">
@@ -89,7 +99,7 @@ export const Reader = ({ asset }: ReaderProps) => {
           </h1>
           {isRaw ? (
             <pre className="flex-1 whitespace-pre-wrap break-words font-mono text-sm text-gray-700 leading-relaxed">
-              {cleanedMarkdown}
+              {encodedRawText}
             </pre>
           ) : (
             <div className="prose prose-slate max-w-none text-gray-700 leading-relaxed">
