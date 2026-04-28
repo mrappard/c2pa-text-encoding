@@ -71,6 +71,6 @@ export const createTextRouter = createTRPCRouter({
 
   populateC2PAText: publicProcedure
     .mutation(() => {
-      return readerLibrary as ReaderAsset[];
+      return readerLibrary as  unknown as ReaderAsset[];
     }),
 });
