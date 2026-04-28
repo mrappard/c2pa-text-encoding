@@ -1,103 +1,197 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { recoverMultipleSecretsFromText, type RecoveredSecretMatch } from "~/encoder";
+import Markdown from "react-markdown";
+import { C2paManifest } from "c2pa-react-component";
+import "c2pa-react-component/style.css";
+import {
+  recoverMultipleSecretsFromText,
+  variationSelectorToByte,
+} from "~/encoder";
+import { useReaderStore } from "~/store/readerStore";
 
 const STORAGE_KEY = "gemini-workspace-content";
+const MANIFESTS_KEY = "gemini-workspace-manifests";
+
+type View = "markdown" | "document" | "c2pa";
+
+export interface DetectedManifest {
+  id: string;
+  text: string;
+}
 
 export const Workspace = () => {
-  const [content, setContent] = useState("");
-  const [foundSecret, setFoundSecret] = useState<RecoveredSecretMatch[] | null>(null);
+  const assets = useReaderStore((s) => s.assets);
 
-  // Load from localStorage on mount
+  const [view, setView] = useState<View>("markdown");
+  const [content, setContent] = useState("");
+  const [detectedManifests, setDetectedManifests] = useState<DetectedManifest[]>([]);
+
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      setContent(saved);
-      const result = recoverMultipleSecretsFromText(saved);
-      setFoundSecret(result.length > 0 ? result : null);
+    const savedContent = localStorage.getItem(STORAGE_KEY);
+    if (savedContent) setContent(savedContent);
+
+    const savedManifests = localStorage.getItem(MANIFESTS_KEY);
+    if (savedManifests) {
+      try {
+        setDetectedManifests(JSON.parse(savedManifests) as DetectedManifest[]);
+      } catch {
+        // corrupt storage — ignore
+      }
     }
   }, []);
 
-  const foundTexts = useMemo(() => {
-    if (!foundSecret) return [];
+  // Ensure every single newline becomes a paragraph break for react-markdown,
+  // without doubling lines that already have a blank line between them.
+  const displayContent = useMemo(
+    () => content.replace(/(?<!\n)\n(?!\n)/g, "\n\n"),
+    [content],
+  );
 
-    // Find Unique Secrets
-    return Array.from(new Set(foundSecret.map((secret) => secret.secret))).map(
-      (uniqueSecret) => {
-        if (uniqueSecret === "Quantum-Scale Wing")
-          return "Quantum-Scale Wing Pattern Variability and Thermodynamic Efficiency in Lepidoptera: A Multimodal Field Study";
-        if (uniqueSecret === "Honeybee Swarms")
-          return "Electrostatic Signaling in Honeybee Swarms: A Novel Communication Modality for Collective Decision-Making";
-        if (uniqueSecret === "Acoustic Structuring")
-          return "Acoustic Structuring and Information Encoding in Raindrop Impact Events on Natural Surfaces";
-        if (uniqueSecret === "Mycelial Networks")
-          return "Transient Memory Formation in Mycelial Networks: Evidence for Distributed Information Retention in Fungal Systems";
-        if (uniqueSecret === "Urban Traffic Lights")
-          return "Urban Traffic Lights as Emergent Synchronization Systems: Evidence for Phase Coupling Without Central Control";
-
-
-
-        if (uniqueSecret === "Microplastic-Induced Modulation"){
-          return "Microplastic-Induced Modulation of Photosynthetic Efficiency in Marine Phytoplankton: Implications for Oceanic Carbon Sequestration";
-        }
-        if (uniqueSecret === "Circadian Phase Drift")
-          return "Circadian Phase Drift in Isolated Human Populations: Evidence for Non-24-Hour Biological Rhythms";
-        if (uniqueSecret === "Latent Semantic Structures")
-          return "Latent Semantic Structures in Avian Vocalizations: Evidence for Hierarchical Syntax in Songbird Communication";
-        if (uniqueSecret === "Residual Thermal Signatures")
-          return "Residual Thermal Signatures as a Side-Channel for User Input Reconstruction on Touchscreen Devices";
-        if (uniqueSecret === "Avian Vocalizations")
-          return "Latent Semantic Structures in Avian Vocalizations: Evidence for Hierarchical Syntax in Songbird Communication";
-        if (uniqueSecret === "Navigation Without Visual"){
-          return "Emergent Map Formation in Human Navigation Without Visual Input: Evidence for Latent Spatial Encoding";
-        }
-
-        return uniqueSecret;
-      }
-    );
-  }, [foundSecret]);
+  // Resolve each detected manifest ID to a full ReaderAsset from the store.
+  const sourceAssets = useMemo(
+    () =>
+      detectedManifests
+        .map((m) => assets.find((a) => a.id === m.id))
+        .filter((a) => a !== undefined),
+    [detectedManifests, assets],
+  );
 
   const handleTextChange = (text: string) => {
-    setContent(text);
-    localStorage.setItem(STORAGE_KEY, text);
-    const result = recoverMultipleSecretsFromText(text);
-    setFoundSecret(result.length > 0 ? result : null);
+    // Run recovery on the raw text before stripping
+    const recovered = recoverMultipleSecretsFromText(text);
+    const newIds = Array.from(new Set(recovered.map((r) => r.secret)));
+
+    if (newIds.length > 0) {
+      setDetectedManifests((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const added = newIds
+          .filter((id) => !existingIds.has(id))
+          .map((id) => {
+            const asset = assets.find((a) => a.id === id);
+            return { id, text: asset ? asset.title : `unknown manifest: ${id}` };
+          });
+        if (added.length === 0) return prev;
+        const next = [...prev, ...added];
+        localStorage.setItem(MANIFESTS_KEY, JSON.stringify(next));
+        return next;
+      });
+    }
+
+    // Strip variation selectors so stored content is clean markdown
+    const cleanText = Array.from(text)
+      .filter((ch) => variationSelectorToByte(ch.codePointAt(0)!) === null)
+      .join("");
+
+    setContent(cleanText);
+    localStorage.setItem(STORAGE_KEY, cleanText);
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 p-6 overflow-hidden">
-      <div className="mb-4 flex flex-col gap-2">
-        <h2 className="text-xl font-semibold text-gray-800">Workspace</h2>
-        <p className="text-sm text-gray-500">
-          Paste text here. Sources will be automatically detected and attributed.
-        </p>
+    <div className="flex flex-col h-full bg-gray-50 overflow-hidden">
+      {/* Sub-toolbar */}
+      <div className="flex items-center gap-1 border-b border-gray-200 bg-white px-6 py-2 shrink-0">
+        {(["markdown", "document", "c2pa"] as View[]).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+              view === v
+                ? "bg-blue-100 text-blue-700"
+                : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            }`}
+          >
+            {v === "c2pa" ? "C2PA" : v.charAt(0).toUpperCase() + v.slice(1)}
+          </button>
+        ))}
       </div>
 
-      <div className="flex flex-1 gap-6 overflow-hidden">
-        <div className="flex-1 flex flex-col">
-          <textarea
-            placeholder="Start typing or paste text from papers..."
-            className="flex-1 p-4 rounded-lg border border-gray-200 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-gray-800 leading-relaxed"
-            value={content}
-            onChange={(e) => handleTextChange(e.target.value)}
-          />
+      <div className="flex flex-1 gap-6 overflow-hidden p-6">
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {view === "markdown" ? (
+            <textarea
+              placeholder="Start typing or paste text from papers..."
+              className="flex-1 p-4 rounded-lg border border-gray-200 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-gray-800 leading-relaxed"
+              value={content}
+              onChange={(e) => handleTextChange(e.target.value)}
+            />
+          ) : view === "document" ? (
+            <div className="flex-1 overflow-auto rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              {content ? (
+                <div className="prose prose-slate max-w-none text-gray-700 leading-relaxed">
+                  <Markdown>{displayContent}</Markdown>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 italic">
+                  Nothing to preview yet. Switch to Markdown and paste some text.
+                </p>
+              )}
+            </div>
+          ) : (
+            /* C2PA view */
+            <div className="flex-1 overflow-auto">
+              {sourceAssets.length > 0 ? (
+                <div className="flex flex-col gap-6">
+                  {sourceAssets.map((asset) => (
+                    <div
+                      key={asset.id}
+                      className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+                    >
+                      <C2paManifest
+                        manifest={asset.manifest}
+                        level={2}
+                        onViewMore={undefined}
+                        defaultViewMore={false}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-sm text-gray-400 italic">
+                    {detectedManifests.length > 0
+                      ? "Detected sources were not found in your library."
+                      : "No sources detected. Paste encoded text in the Markdown tab."}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="w-80 flex flex-col gap-4">
+        {/* Detected sources panel */}
+        <div className="w-80 shrink-0 flex flex-col gap-4">
           <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
             <h3 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
               <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
               Detected Sources
             </h3>
-            {foundTexts.length > 0 ? (
+            {detectedManifests.length > 0 ? (
               <ul className="space-y-3">
-                {foundTexts.map((source, index) => (
+                {detectedManifests.map((manifest) => (
                   <li
-                    key={index}
-                    className="text-sm text-gray-700 bg-blue-50 p-2 rounded border border-blue-100 italic"
+                    key={manifest.id}
+                    className="rounded border border-blue-100 bg-blue-50 p-2"
                   >
-                    &quot;{source}&quot;
+                    <p className="text-sm italic text-gray-700">
+                      &quot;{manifest.text}&quot;
+                    </p>
+                    <p className="mt-1 truncate font-mono text-xs text-gray-400">
+                      {manifest.id}
+                    </p>
+                    <button
+                      onClick={() => {
+                        setDetectedManifests((prev) => {
+                          const next = prev.filter((m) => m.id !== manifest.id);
+                          localStorage.setItem(MANIFESTS_KEY, JSON.stringify(next));
+                          return next;
+                        });
+                      }}
+                      className="mt-2 text-xs text-red-500 hover:text-red-700 transition-colors"
+                    >
+                      Remove
+                    </button>
                   </li>
                 ))}
               </ul>

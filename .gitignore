@@ -28,3 +28,8 @@ keys/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+.yalc/
+/localNpm
+yalc.lock
+GEMINI.MD

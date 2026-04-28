@@ -6,7 +6,16 @@ import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
 const config = {
-         output: "standalone",
+  output: "standalone",
+  serverExternalPackages: ["c2pa-rs-javascript-library"],
+  webpack: (config) => {
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true,
+    };
+
+    return config;
+  },
 };
 
 export default config;
