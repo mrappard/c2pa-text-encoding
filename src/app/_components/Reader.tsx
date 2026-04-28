@@ -15,14 +15,21 @@ type View = "document" | "c2pa";
 
 export const Reader = ({ asset }: ReaderProps) => {
   const [view, setView] = useState<View>("document");
-  const [isRaw, setIsRaw] = useState(false);
+  const [rawLocked, setRawLocked] = useState(false);
+  const [rawHeld, setRawHeld] = useState(false);
+  const isRaw = rawLocked || rawHeld;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Control" || e.key === "Meta") setIsRaw(true);
+      if (e.key === "Tab") {
+        e.preventDefault();
+        setRawLocked((prev) => !prev);
+      } else if (e.key === "Control" || e.key === "Meta") {
+        setRawHeld(true);
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "Control" || e.key === "Meta") setIsRaw(false);
+      if (e.key === "Control" || e.key === "Meta") setRawHeld(false);
     };
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
@@ -75,9 +82,11 @@ export const Reader = ({ asset }: ReaderProps) => {
 
         {view === "document" && (
           <span className="text-xs font-mono text-gray-400 select-none">
-            {isRaw
-              ? "RAW  · release Ctrl / ⌘ to render"
-              : "RENDERED  · hold Ctrl / ⌘ for raw"}
+            {rawLocked
+              ? "RAW (locked)  · Tab to unlock"
+              : isRaw
+                ? "RAW  · release Ctrl / ⌘ to render"
+                : "RENDERED  · hold Ctrl / ⌘ for raw  · Tab to lock raw"}
           </span>
         )}
       </div>
