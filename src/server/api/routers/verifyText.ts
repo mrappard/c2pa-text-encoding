@@ -1,20 +1,15 @@
 import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
-import { join } from "path";
-import { readFileSync } from "fs";
 import {
   verifyMarkdownAsset,
 } from "c2pa-rs-javascript-library";
-
-const SAMPLE_DIR = join(process.cwd(), "certs");
-
+import { env } from "~/env";
 
 function loadCerts() {
+  const certBuf = Buffer.from(env.C2PA_SIGNING_CERT, "base64");
   return {
-    signcert: new Uint8Array(readFileSync(join(SAMPLE_DIR, "es256_certs.pem"))),
-    pkey: new Uint8Array(readFileSync(join(SAMPLE_DIR, "es256_private.key"))),
-    certPem: readFileSync(join(SAMPLE_DIR, "es256_certs.pem"), "utf-8"),
+    certPem: certBuf.toString("utf-8"),
   };
 }
 

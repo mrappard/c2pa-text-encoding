@@ -33,3 +33,4 @@ keys/
 /localNpm
 yalc.lock
 GEMINI.MD
+.env.local
