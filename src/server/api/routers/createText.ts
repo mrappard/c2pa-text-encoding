@@ -1,12 +1,10 @@
 import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
-import { join } from "path";
-import { readFileSync } from "fs";
 import { signMarkdownAsset } from "c2pa-rs-javascript-library";
 import type { ReaderAsset } from "~/store/readerStore";
-
-const SAMPLE_DIR = join(process.cwd(), "certs");
+import { env } from "~/env";
+import readerLibrary from "~/store/readerLibrary.json";
 
 function makeManifest(title: string, authors?: string[]) {
   return {
@@ -37,10 +35,12 @@ function makeManifest(title: string, authors?: string[]) {
 
 
 function loadCerts() {
+  const certBuf = Buffer.from(env.C2PA_SIGNING_CERT, "base64");
+  const keyBuf = Buffer.from(env.C2PA_SIGNING_KEY, "base64");
   return {
-    signcert: new Uint8Array(readFileSync(join(SAMPLE_DIR, "es256_certs.pem"))),
-    pkey: new Uint8Array(readFileSync(join(SAMPLE_DIR, "es256_private.key"))),
-    certPem: readFileSync(join(SAMPLE_DIR, "es256_certs.pem"), "utf-8"),
+    signcert: new Uint8Array(certBuf),
+    pkey: new Uint8Array(keyBuf),
+    certPem: certBuf.toString("utf-8"),
   };
 }
 
@@ -71,10 +71,6 @@ export const createTextRouter = createTRPCRouter({
 
   populateC2PAText: publicProcedure
     .mutation(() => {
-      const raw = readFileSync(
-        join(process.cwd(), "src", "store", "readerLibrary.json"),
-        "utf-8",
-      );
-      return JSON.parse(raw) as ReaderAsset[];
+      return readerLibrary as ReaderAsset[];
     }),
 });

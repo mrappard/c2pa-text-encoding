@@ -8,6 +8,8 @@ export const env = createEnv({
    */
   server: {
     NODE_ENV: z.enum(["development", "test", "production"]),
+    C2PA_SIGNING_CERT: z.string().min(1),
+    C2PA_SIGNING_KEY: z.string().min(1),
   },
 
   /**
@@ -25,6 +27,8 @@ export const env = createEnv({
    */
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
+    C2PA_SIGNING_CERT: process.env.C2PA_SIGNING_CERT,
+    C2PA_SIGNING_KEY: process.env.C2PA_SIGNING_KEY,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**
