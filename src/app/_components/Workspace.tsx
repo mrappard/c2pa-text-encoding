@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Markdown from "react-markdown";
+import { C2paManifest } from "c2pa-react-component";
+import "c2pa-react-component/style.css";
 import {
   recoverMultipleSecretsFromText,
   variationSelectorToByte,
@@ -11,7 +13,7 @@ import { useReaderStore } from "~/store/readerStore";
 const STORAGE_KEY = "gemini-workspace-content";
 const MANIFESTS_KEY = "gemini-workspace-manifests";
 
-type View = "markdown" | "document";
+type View = "markdown" | "document" | "c2pa";
 
 export interface DetectedManifest {
   id: string;
@@ -46,19 +48,35 @@ export const Workspace = () => {
     [content],
   );
 
+  // Resolve each detected manifest ID to a full ReaderAsset from the store.
+  const sourceAssets = useMemo(
+    () =>
+      detectedManifests
+        .map((m) => assets.find((a) => a.id === m.id))
+        .filter((a) => a !== undefined),
+    [detectedManifests, assets],
+  );
+
   const handleTextChange = (text: string) => {
     // Run recovery on the raw text before stripping
     const recovered = recoverMultipleSecretsFromText(text);
-    const uniqueIds = Array.from(new Set(recovered.map((r) => r.secret)));
-    const manifests: DetectedManifest[] = uniqueIds.map((id) => {
-      const asset = assets.find((a) => a.id === id);
-      return {
-        id,
-        text: asset ? asset.title : `unknown manifest: ${id}`,
-      };
-    });
-    setDetectedManifests(manifests);
-    localStorage.setItem(MANIFESTS_KEY, JSON.stringify(manifests));
+    const newIds = Array.from(new Set(recovered.map((r) => r.secret)));
+
+    if (newIds.length > 0) {
+      setDetectedManifests((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const added = newIds
+          .filter((id) => !existingIds.has(id))
+          .map((id) => {
+            const asset = assets.find((a) => a.id === id);
+            return { id, text: asset ? asset.title : `unknown manifest: ${id}` };
+          });
+        if (added.length === 0) return prev;
+        const next = [...prev, ...added];
+        localStorage.setItem(MANIFESTS_KEY, JSON.stringify(next));
+        return next;
+      });
+    }
 
     // Strip variation selectors so stored content is clean markdown
     const cleanText = Array.from(text)
@@ -73,26 +91,19 @@ export const Workspace = () => {
     <div className="flex flex-col h-full bg-gray-50 overflow-hidden">
       {/* Sub-toolbar */}
       <div className="flex items-center gap-1 border-b border-gray-200 bg-white px-6 py-2 shrink-0">
-        <button
-          onClick={() => setView("markdown")}
-          className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-            view === "markdown"
-              ? "bg-blue-100 text-blue-700"
-              : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-          }`}
-        >
-          Markdown
-        </button>
-        <button
-          onClick={() => setView("document")}
-          className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-            view === "document"
-              ? "bg-blue-100 text-blue-700"
-              : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-          }`}
-        >
-          Document
-        </button>
+        {(["markdown", "document", "c2pa"] as View[]).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+              view === v
+                ? "bg-blue-100 text-blue-700"
+                : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            }`}
+          >
+            {v === "c2pa" ? "C2PA" : v.charAt(0).toUpperCase() + v.slice(1)}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-1 gap-6 overflow-hidden p-6">
@@ -105,7 +116,7 @@ export const Workspace = () => {
               value={content}
               onChange={(e) => handleTextChange(e.target.value)}
             />
-          ) : (
+          ) : view === "document" ? (
             <div className="flex-1 overflow-auto rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
               {content ? (
                 <div className="prose prose-slate max-w-none text-gray-700 leading-relaxed">
@@ -115,6 +126,35 @@ export const Workspace = () => {
                 <p className="text-sm text-gray-400 italic">
                   Nothing to preview yet. Switch to Markdown and paste some text.
                 </p>
+              )}
+            </div>
+          ) : (
+            /* C2PA view */
+            <div className="flex-1 overflow-auto">
+              {sourceAssets.length > 0 ? (
+                <div className="flex flex-col gap-6">
+                  {sourceAssets.map((asset) => (
+                    <div
+                      key={asset.id}
+                      className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+                    >
+                      <C2paManifest
+                        manifest={asset.manifest}
+                        level={2}
+                        onViewMore={undefined}
+                        defaultViewMore={false}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-sm text-gray-400 italic">
+                    {detectedManifests.length > 0
+                      ? "Detected sources were not found in your library."
+                      : "No sources detected. Paste encoded text in the Markdown tab."}
+                  </p>
+                </div>
               )}
             </div>
           )}
@@ -140,6 +180,18 @@ export const Workspace = () => {
                     <p className="mt-1 truncate font-mono text-xs text-gray-400">
                       {manifest.id}
                     </p>
+                    <button
+                      onClick={() => {
+                        setDetectedManifests((prev) => {
+                          const next = prev.filter((m) => m.id !== manifest.id);
+                          localStorage.setItem(MANIFESTS_KEY, JSON.stringify(next));
+                          return next;
+                        });
+                      }}
+                      className="mt-2 text-xs text-red-500 hover:text-red-700 transition-colors"
+                    >
+                      Remove
+                    </button>
                   </li>
                 ))}
               </ul>

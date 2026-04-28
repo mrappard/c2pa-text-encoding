@@ -43,6 +43,8 @@ export default function Home() {
     onSuccess: (data) => {
       assets.forEach((a) => deleteAsset(a.id));
       (data as ReaderAsset[]).forEach((asset) => insertAsset(asset));
+      localStorage.removeItem("gemini-workspace-content");
+      localStorage.removeItem("gemini-workspace-manifests");
     },
   });
 

@@ -1,29 +1,151 @@
-# Create T3 App
+# C2PA Text 
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+A document reader and composition tool built on [C2PA](https://c2pa.org/) provenance standards and Unicode steganography. Documents are cryptographically signed, and text copied from them carries an invisible watermark that links back to the original asset.
 
-## What's next? How do I make an app with this?
+---
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+## How It Works
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+### Signing
+Markdown documents are signed using the [C2PA Rust JavaScript library](https://github.com/contentauth/c2pa-rs). Each signed document receives a unique manifest ID (a URN) and has author and publisher metadata embedded in a `stds.schema-org.CreativeWork` assertion.
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+### Watermarking
+When a user holds **Ctrl** (Windows/Linux) or **⌘** (Mac) in the Reader, the document switches to raw text mode. That raw text has the asset's manifest ID invisibly embedded using Unicode variation selectors (U+FE00–U+FE0F, U+E0100–U+E01EF) — one hidden byte per visible character. The text looks identical to the eye but carries a recoverable secret.
 
-## Learn More
+### Attribution
+When watermarked text is pasted into the Workspace, the app recovers the hidden ID, looks it up in the local library, and attributes the source automatically. No manual citation required.
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+---
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+## Features
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+### Reader
+- Renders signed Markdown documents with `react-markdown`
+- **Document / C2PA** toggle — view rendered content or the full C2PA manifest
+- **Hold Ctrl / ⌘** — switch to raw text mode; the raw text is re-encoded with the asset ID as a hidden watermark, ready for copy-paste tracing
+- HTML comments (C2PA manifest blocks) are stripped before display
 
-## How do I deploy this?
+### Workspace
+- **Markdown** tab — paste or type raw Markdown
+- **Document** tab — live rendered preview of the Markdown
+- **C2PA** tab — shows the full C2PA manifest for every detected source
+- On paste, hidden IDs are recovered before variation selectors are stripped; the stored content is always clean Markdown
+- Detected sources persist across page reloads via `localStorage`; editing plain text never clears them
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+### Verify
+- Drag-and-drop (or click-to-select) a `.md` / `.markdown` file
+- Verifies its C2PA signature and displays the manifest
+- **Add to Library** saves the asset to the local store
+
+### Debug
+- **Seed DB** — calls the server to load all pre-signed documents from `src/store/readerLibrary.json`, replacing the current library and clearing all Workspace state
+
+### Library (sidebar)
+- Lists all assets in the Zustand store (persisted to `localStorage`)
+- Search by title
+- Click any entry to open it in the Reader
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | [Next.js 15](https://nextjs.org) (App Router, Turbopack) |
+| API | [tRPC 11](https://trpc.io) |
+| Styling | [Tailwind CSS 4](https://tailwindcss.com) |
+| State | [Zustand 5](https://zustand-demo.pmnd.rs) with `persist` middleware |
+| Markdown | [react-markdown 10](https://github.com/remarkjs/react-markdown) |
+| C2PA signing/verification | [c2pa-rs-javascript-library](https://github.com/contentauth/c2pa-rs) (WASM) |
+| C2PA UI components | c2pa-react-component (local package) |
+| Steganography | Custom Unicode variation-selector encoder (`src/encoder/index.ts`) |
+
+---
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── _components/
+│   │   ├── Reader.tsx        # Document viewer with C2PA toggle and watermark encoding
+│   │   ├── Workspace.tsx     # Composition area with source detection
+│   │   ├── DragAndDrop.tsx   # File verifier
+│   │   └── button.tsx        # Shared C2PA button
+│   ├── page.tsx              # Root layout — sidebar, tabs, Debug screen
+│   └── ...
+├── encoder/
+│   └── index.ts              # Unicode steganography — embed/recover hidden bytes
+├── server/api/routers/
+│   ├── createText.ts         # tRPC: sign Markdown, serve pre-built library
+│   └── verifyText.ts         # tRPC: verify C2PA Markdown
+├── store/
+│   ├── readerStore.ts        # Zustand store — ReaderAsset[]
+│   └── readerLibrary.json    # Pre-signed assets (generated by populate script)
+├── markdown/                 # Source .MD files
+└── certs/                    # ES256 signing certificate and private key
+scripts/
+└── populateLibrary.mjs       # Signs all /markdown files and writes readerLibrary.json
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+- Node.js 22+ (or 18/20 with `--experimental-wasm-modules`)
+- npm 11+
+
+### Install
+```bash
+npm install
+```
+
+### Generate the signed library
+Signs all `.MD` files in `/markdown` and writes `src/store/readerLibrary.json`:
+```bash
+npm run populate-library
+# or on Node < 22:
+node --experimental-wasm-modules scripts/populateLibrary.mjs
+```
+
+### Run dev server
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+### Other scripts
+```bash
+npm run build        # Production build
+npm run typecheck    # TypeScript check
+npm run lint         # ESLint
+```
+
+---
+
+## Certificates
+
+Signing uses an ES256 key pair in `certs/`:
+- `es256_certs.pem` — signing certificate
+- `es256_private.key` — private key
+
+These are test certificates. Replace them with trusted certificates for production use.
+
+---
+
+## Steganography Details
+
+Hidden bytes are encoded using Unicode variation selectors attached to visible characters:
+
+- Bytes 0–15 → U+FE00–U+FE0F
+- Bytes 16–255 → U+E0100–U+E01EF
+
+Each block contains a 4-byte magic header (`VSR1`), a 1-byte version, a 2-byte payload length, the UTF-8 payload, and a CRC32 checksum. Multiple copies are embedded throughout a document for redundancy — a partial excerpt containing one full block is enough to recover the secret.
+
+To decode text copied from the Reader:
+```ts
+import { recoverSecretFromText } from "~/encoder";
+const id = recoverSecretFromText(pastedText); // → "urn:c2pa:..."
+```
